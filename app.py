@@ -47,7 +47,66 @@ TOKEN_FILE = os.path.join(
     "token.json"
 )
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# ============================================================
+# SECURE CLOUD SECRETS
+# ============================================================
+
+# Local:
+#   Uses GEMINI_API_KEY environment variable.
+#
+# Streamlit Cloud:
+#   Uses GEMINI_API_KEY from Streamlit Secrets.
+
+try:
+    GEMINI_API_KEY = st.secrets.get(
+        "GEMINI_API_KEY",
+        os.getenv("GEMINI_API_KEY")
+    )
+except Exception:
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+
+# ------------------------------------------------------------
+# Recreate Google OAuth files from Streamlit Secrets
+# ------------------------------------------------------------
+
+try:
+
+    if "CREDENTIALS_JSON" in st.secrets:
+
+        credentials_json = st.secrets["CREDENTIALS_JSON"]
+
+        if not os.path.exists(CREDENTIALS_FILE):
+
+            with open(
+                CREDENTIALS_FILE,
+                "w",
+                encoding="utf-8"
+            ) as f:
+
+                f.write(credentials_json)
+
+
+    if "TOKEN_JSON" in st.secrets:
+
+        token_json = st.secrets["TOKEN_JSON"]
+
+        if not os.path.exists(TOKEN_FILE):
+
+            with open(
+                TOKEN_FILE,
+                "w",
+                encoding="utf-8"
+            ) as f:
+
+                f.write(token_json)
+
+except Exception as e:
+
+    st.warning(
+        f"Cloud credential setup warning: {e}"
+    )
 
 
 # ============================================================
@@ -106,11 +165,9 @@ st.markdown(
 # ============================================================
 
 def get_email_state(email_id):
-    """
-    Returns the editable/reply state for a Gmail message.
-    """
 
     if email_id not in st.session_state.email_states:
+
         st.session_state.email_states[email_id] = {
             "reply": "",
             "status": "Pending",
@@ -156,6 +213,17 @@ def get_gmail_service():
 
             creds.refresh(Request())
 
+            # Save refreshed token
+            with open(
+                TOKEN_FILE,
+                "w",
+                encoding="utf-8"
+            ) as token:
+
+                token.write(
+                    creds.to_json()
+                )
+
         except Exception:
 
             creds = None
@@ -169,9 +237,9 @@ def get_gmail_service():
         if not os.path.exists(CREDENTIALS_FILE):
 
             st.error(
-                "credentials.json was not found.\n\n"
-                "Please put credentials.json inside your "
-                "Automatic Mail Responder project folder."
+                "Google OAuth credentials are not configured.\n\n"
+                "Please add CREDENTIALS_JSON and TOKEN_JSON "
+                "to Streamlit Cloud Secrets."
             )
 
             st.stop()
@@ -191,7 +259,8 @@ def get_gmail_service():
 
         with open(
             TOKEN_FILE,
-            "w"
+            "w",
+            encoding="utf-8"
         ) as token:
 
             token.write(
@@ -229,7 +298,10 @@ def get_header(headers, name):
 
     for header in headers:
 
-        if header.get("name", "").lower() == name.lower():
+        if header.get(
+            "name",
+            ""
+        ).lower() == name.lower():
 
             return header.get(
                 "value",
@@ -540,7 +612,6 @@ def fetch_gmail_emails(
                     email_data
                 )
 
-                # Create session state
                 get_email_state(
                     message_id
                 )
@@ -1068,10 +1139,14 @@ elif page == "Email Inbox":
             if (
                 search_lower
                 in email["from"].lower()
+
                 or
+
                 search_lower
                 in email["subject"].lower()
+
                 or
+
                 search_lower
                 in email["body"].lower()
             )
@@ -1272,9 +1347,9 @@ elif page == "Email Inbox":
                     )
                 )
 
-                # --------------------------------------------
+                # ------------------------------------------------
                 # Save edited reply
-                # --------------------------------------------
+                # ------------------------------------------------
 
                 save_col, reset_col = st.columns(2)
 
@@ -1355,9 +1430,9 @@ elif page == "Email Inbox":
 
                         st.rerun()
 
-                # --------------------------------------------
+                # ------------------------------------------------
                 # Preview
-                # --------------------------------------------
+                # ------------------------------------------------
 
                 st.subheader(
                     "👀 Reply Preview"
@@ -1381,9 +1456,9 @@ elif page == "Email Inbox":
                         "AI-generated reply."
                     )
 
-                # --------------------------------------------
+                # ------------------------------------------------
                 # Approve / Reject
-                # --------------------------------------------
+                # ------------------------------------------------
 
                 st.subheader(
                     "⚡ Review Reply"
@@ -1415,9 +1490,9 @@ elif page == "Email Inbox":
                         use_container_width=True
                     )
 
-                # --------------------------------------------
+                # ------------------------------------------------
                 # SEND
-                # --------------------------------------------
+                # ------------------------------------------------
 
                 if approve:
 
@@ -1467,9 +1542,9 @@ elif page == "Email Inbox":
                                 f"{result}"
                             )
 
-                # --------------------------------------------
+                # ------------------------------------------------
                 # REJECT
-                # --------------------------------------------
+                # ------------------------------------------------
 
                 if reject:
 
@@ -1596,9 +1671,9 @@ elif page == "Add Test Email":
 
         else:
 
-            # --------------------------------------------
+            # ------------------------------------------------
             # Generate AI reply
-            # --------------------------------------------
+            # ------------------------------------------------
 
             with st.spinner(
                 "Generating AI reply..."
@@ -1621,7 +1696,8 @@ elif page == "Add Test Email":
             else:
 
                 test_id = (
-                    f"test_{len(st.session_state.test_emails) + 1}"
+                    f"test_"
+                    f"{len(st.session_state.test_emails) + 1}"
                 )
 
                 test_email = {
